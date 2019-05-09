@@ -2,6 +2,7 @@ import tweepy
 import time
 import re
 import requests
+import schedule
 
 print('my twitter bot')
 
@@ -43,6 +44,12 @@ def storeUser(userID, city, file_name):
     return
 
 
+def getWeather(city):
+    x = requests.get(
+        f'http://api.openweathermap.org/data/2.5/weather?q={city}&APPID=YOURKEYHERE').json()
+    return float(x['main']['temp'] - 273.15).__round__(0)
+
+
 def displayWeather():
     print('Retrieving and replying to tweets...')
 
@@ -56,33 +63,73 @@ def displayWeather():
         last_seen_id = mention.id
         store_last_seen_id(last_seen_id, FILE_NAME)
         if '#' in mention.full_text.lower():
+            if '#unsub' not in mention.full_text.lower():
+                s = mention.full_text.lower()
+                tags = re.findall(r"#(\w+)", s)
 
-            s = mention.full_text.lower()
-            tags = re.findall(r"#(\w+)", s)
+                if len(tags) is 1:
+                    print(tags)
+                    x = requests.get(f'http://api.openweathermap.org/data/2.5/weather?q={tags[0]}'
+                                     f'&APPID=YOURKEYHERE').json()
+                    if x['cod'] == 200:
+                        print('200')
+                        temperature = getWeather(tags[0])
+                        degree = '°C'
+                        if mention.user.screen_name in open(USERS_FILE).read():
+                            print("User already present in file")
+                            with open(USERS_FILE, 'r') as file:
+                                lines = file.readlines()
+                            # now we have an array of lines.
 
-
-            if len(tags) is 1:
-                print(tags)
-                x = requests.get(f'http://api.openweathermap.org/data/2.5/weather?q={tags[0]}&APPID=YOURKEYHERE').json()
-                if x['cod'] == 200:
-                    print('200')
-                    temperature = float(x['main']['temp'] - 273.15).__round__(0)
-                    degree = '°C'
-                    if mention.user.screen_name in open('users.txt').read():
-                        print("User already present in file")
+                            for idx, val in enumerate(lines):
+                                if mention.user.screen_name in val:
+                                    lines[idx] = f'{mention.user.screen_name},{tags[0]}\n'
+                            with open(USERS_FILE, 'w') as file:
+                                file.writelines(lines)
+                        else:
+                            print('tweeting back to user')
+                            api.update_status(f'@{mention.user.screen_name} Weather for {tags[0]} is '
+                                              f'{temperature}{degree}, You have successfully subscribed.'
+                                              f' Use #unsub to unsubscribe', mention.id)
+                            storeUser(mention.user.screen_name, tags[0], USERS_FILE)
+                            # my_list = line.split(",")
                     else:
-                        print('tweeting back to user')
-                        api.update_status(f'@{mention.user.screen_name} Weather for {tags[0]} is {temperature}{degree}')
-                        storeUser(mention.user.screen_name, tags[0], USERS_FILE)
-                        # my_list = line.split(",")
-                else:
-                    print('city not found')
+                        print('city not found')
+            else:
+                with open(USERS_FILE, "r") as infile:
+                    lines = infile.readlines()
 
+                    for pos, line in enumerate(lines):
+                        if mention.user.screen_name in line:
+                            lines[pos] = ''
+                    with open(USERS_FILE, 'w') as file:
+                        file.writelines(lines)
+
+
+def scheduledweather():
+    print('in scheduled weather')
+    with open(USERS_FILE) as f:
+        for line in f:
+            my_list = line.split(",")
+            degree = '°C'
+            temperature = getWeather(my_list[1])
+            city = my_list[1].replace('\n', '')
+            api.update_status(f'@{my_list[0]} Weather for {city} is {temperature}{degree}')
+            print('sent!!')
+
+
+# schedule.every(10).minutes.do(job)
+# schedule.every().hour.do(job)
+# schedule.every(5).to(10).minutes.do(job)
+# schedule.every().monday.do(job)
+# schedule.every().wednesday.at("13:15").do(job)
+schedule.every().day.at("13:55").do(scheduledweather)
+schedule.every().minute.at(":30").do(displayWeather)
 
 while True:
     try:
-        displayWeather()
-        time.sleep(15)
+        schedule.run_pending()
+        time.sleep(1)
     except tweepy.TweepError:
         time.sleep(2)
         continue
