@@ -1,5 +1,12 @@
 # Twitter-Weather-bot
-Tweets to @tempbot_ with hashtags of any city name (#Pune), it would subscribe user to receive  a tweet per day with the weather of the subscribed city
 
-
-to unsubscribe tweet with #unsub
+* Add API keys
+ 
+      CONSUMER_KEY = '#'
+      CONSUMER_SECRET = '#'
+      ACCESS_KEY = '#'
+      ACCESS_SECRET = '#'
+      
+* To run the bot 
+  
+      python bot.py
